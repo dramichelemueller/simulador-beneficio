@@ -415,7 +415,7 @@ function fatorAcum(de,ate){
 }
 
 function moeda(v){return'R$ '+v.toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');}
-function fmtComp(c){const[a,m]=c.split('-');return m+'/'+a;}
+function fmtComp(c){if(!c)return'—';const[a,m]=c.split('-');return m+'/'+a;}
 
 // ── ESTADO ───────────────────────────────────────────────────
 let competencias=[];
@@ -895,7 +895,211 @@ function mostrarToast(m,e){
 
 function exportarPDF(){
   if(!resultadoCalculo){alert('Calcule o benefício primeiro.');return;}
-  mostrarToast('PDF em desenvolvimento — em breve!');
+  const{jsPDF}=window.jspdf;
+  const R=resultadoCalculo;
+  const cliente=document.getElementById('m-nome').value||'(não informado)';
+  const sexoVal=document.getElementById('m-sexo').value;
+  const sexoLbl=sexoVal==='F'?'Feminino':'Masculino';
+  const nasc=document.getElementById('m-nasc').value;
+  const dataCalc=document.getElementById('m-data').value;
+  const adv=document.getElementById('m-adv').value||'';
+
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const W=210,H=297,mL=14,mR=196;
+  const AZUL=[26,58,92],AZUL2=[42,90,140],BRANCO=[255,255,255];
+  const VERDE=[26,106,58],VERDE_BG=[237,248,240];
+  const WARN=[90,74,0],WARN_BG=[255,251,230];
+
+  function fd(s){if(!s)return'—';const[a,m,d]=s.split('-');return d+'/'+m+'/'+a;}
+  function mc(v){return'R$ '+v.toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');}
+
+  let y=0;
+
+  // ── HEADER ──
+  doc.setFillColor(...AZUL);doc.rect(0,0,W,36,'F');
+  doc.setTextColor(...BRANCO);doc.setFont('helvetica','bold');doc.setFontSize(13);
+  doc.text('Simulador de Benefício — Cálculo de RMI',mL,12);
+  doc.setFont('helvetica','normal');doc.setFontSize(7.5);
+  doc.text('Lei 8.213/91 · EC 103/2019 · LC 142/2013 · Correção INPC · Mueller & Linck Advocacia',mL,18);
+  doc.setDrawColor(...AZUL2);doc.setLineWidth(0.3);doc.line(mL,21,mR,21);
+  doc.setFontSize(7);doc.setTextColor(200,215,230);
+  doc.text('CLIENTE',mL,27);doc.text('SEXO',88,27);doc.text('NASCIMENTO',108,27);doc.text('DATA CÁLCULO',148,27);doc.text('ADVOGADA',172,27);
+  doc.setTextColor(...BRANCO);doc.setFont('helvetica','bold');doc.setFontSize(8.5);
+  doc.text(cliente.substring(0,30),mL,33);
+  doc.text(sexoLbl,88,33);doc.text(fd(nasc),108,33);doc.text(fd(dataCalc),148,33);doc.text(adv.substring(0,16),172,33);
+  y=42;
+
+  // ── MELHOR REGRA ──
+  if(R.melhor){
+    doc.setFillColor(...VERDE_BG);doc.roundedRect(mL,y,mR-mL,20,2,2,'F');
+    doc.setDrawColor(...VERDE);doc.setLineWidth(0.4);doc.roundedRect(mL,y,mR-mL,20,2,2,'S');
+    doc.setTextColor(...VERDE);doc.setFont('helvetica','bold');doc.setFontSize(7);
+    doc.text('✓ MELHOR REGRA — '+R.melhor.grupo.toUpperCase(),mL+4,y+6);
+    doc.setFontSize(13);doc.text(R.melhor.nome,mL+4,y+13);
+    doc.setFont('helvetica','bold');doc.setFontSize(16);
+    doc.text(mc(R.melhor.rmi),mR-4,y+13,{align:'right'});
+    doc.setFont('helvetica','normal');doc.setFontSize(7);
+    doc.text(R.melhor.detalhe,mL+4,y+18);
+    y+=26;
+  }
+
+  // ── CARDS POR REGRA ──
+  doc.setTextColor(100,96,90);doc.setFont('helvetica','bold');doc.setFontSize(8);
+  doc.text('RESULTADO POR MODALIDADE',mL,y+5);
+  y+=9;
+
+  const cardW=(mR-mL-8)/3;
+  let cx=mL,cy=y,cardH=26;
+  R.regras.forEach((r,i)=>{
+    const isMelhor=R.melhor&&r.nome===R.melhor.nome&&r.grupo===R.melhor.grupo;
+    if(r.disponivel){
+      doc.setFillColor(...(isMelhor?VERDE_BG:[248,247,244]));
+      doc.roundedRect(cx,cy,cardW,cardH,2,2,'F');
+      doc.setDrawColor(...(isMelhor?VERDE:[220,216,210]));
+      doc.setLineWidth(isMelhor?0.5:0.2);
+      doc.roundedRect(cx,cy,cardW,cardH,2,2,'S');
+      doc.setTextColor(...(isMelhor?VERDE:[100,96,90]));
+      doc.setFont('helvetica','bold');doc.setFontSize(5.5);
+      doc.text(r.grupo.substring(0,28),cx+3,cy+5);
+      doc.setFontSize(6.5);
+      doc.text(r.nome.substring(0,26),cx+3,cy+10);
+      doc.setFontSize(12);
+      doc.text(mc(r.rmi),cx+3,cy+19);
+      doc.setFont('helvetica','normal');doc.setFontSize(5.5);
+      doc.setTextColor(120,116,110);
+      doc.text('SB: '+mc(r.sb),cx+3,cy+24);
+    }else{
+      doc.setFillColor(248,247,244);doc.roundedRect(cx,cy,cardW,cardH,2,2,'F');
+      doc.setDrawColor(220,216,210);doc.setLineWidth(0.2);doc.roundedRect(cx,cy,cardW,cardH,2,2,'S');
+      doc.setTextColor(160,156,150);doc.setFont('helvetica','normal');doc.setFontSize(6);
+      doc.text(r.nome.substring(0,26),cx+3,cy+10);
+      doc.text('Requisitos não preenchidos',cx+3,cy+17);
+    }
+    cx+=cardW+4;
+    if(cx+cardW>mR){cx=mL;cy+=cardH+4;}
+  });
+  y=cy+cardH+8;
+
+  // ── MEMORIAL ──
+  if(y+24>H-20){doc.addPage();y=14;}
+  doc.setFillColor(248,247,244);doc.roundedRect(mL,y,mR-mL,24,2,2,'F');
+  doc.setDrawColor(220,216,210);doc.setLineWidth(0.2);doc.roundedRect(mL,y,mR-mL,24,2,2,'S');
+  doc.setTextColor(100,96,90);doc.setFont('helvetica','bold');doc.setFontSize(7.5);
+  doc.text('MEMORIAL DE CÁLCULO',mL+4,y+6);
+  doc.setFont('helvetica','normal');doc.setFontSize(7);
+  const memCols=[[
+    'Total de competências: '+R.total,
+    'Competências (80% maiores): '+R.n80,
+    'Média 80% maiores (SB): '+mc(R.SB80),
+  ],[
+    'Média de todos os salários: '+mc(R.SBtodos),
+    'Fator Previdenciário: '+R.fp.toFixed(4),
+    'TC informado: '+R.tcAnos+' anos',
+  ],[
+    'Divisor mínimo: 108 meses (Lei 14.331/2022)',
+    'Salário mínimo 2026: R$ 1.621,00',
+    'Teto INSS 2026: R$ 8.475,55',
+  ]];
+  memCols.forEach((col,ci)=>{
+    col.forEach((txt,ri)=>{
+      doc.text(txt,mL+4+ci*60,y+12+ri*4);
+    });
+  });
+  y+=30;
+
+  // ── AVISOS COMPETÊNCIAS AJUSTADAS ──
+  const ajustadas=R.competencias.filter(c=>c.ajustado);
+  if(ajustadas.length){
+    if(y+6+ajustadas.length*4+6>H-20){doc.addPage();y=14;}
+    const avH=8+ajustadas.length*4+4;
+    doc.setFillColor(...WARN_BG);doc.roundedRect(mL,y,mR-mL,avH,2,2,'F');
+    doc.setDrawColor(200,180,0);doc.setLineWidth(0.4);doc.line(mL+1,y,mL+1,y+avH);
+    doc.setTextColor(...WARN);doc.setFont('helvetica','bold');doc.setFontSize(7.5);
+    doc.text('⚠ Competências ajustadas para o salário mínimo ('+ajustadas.length+')',mL+5,y+6);
+    doc.setFont('helvetica','normal');doc.setFontSize(6.5);
+    ajustadas.forEach((c,i)=>{
+      doc.text(fmtComp(c.comp)+' — original: '+mc(c.original)+' → ajustado para SM de '+mc(c.sm),mL+5,y+11+i*4);
+    });
+    y+=avH+6;
+  }
+
+  // ── TABELA COMPETÊNCIAS ──
+  if(y+10>H-20){doc.addPage();y=14;}
+  doc.setTextColor(100,96,90);doc.setFont('helvetica','bold');doc.setFontSize(7.5);
+  doc.text('COMPETÊNCIAS — EXTRATO CNIS CORRIGIDO PELO INPC',mL,y+5);
+  y+=9;
+
+  const tRows=R.competencias.map(c=>{
+    const tags=(c.ajustado?'[SM]':'')+(c.acimaTeto?'[TETO]':'');
+    return[
+      fmtComp(c.comp),
+      mc(c.original),
+      mc(c.sm),
+      mc(c.valorUsado)+(tags?' '+tags:''),
+      '×'+c.fator.toFixed(4),
+      mc(c.corrigido),
+    ];
+  });
+
+  doc.autoTable({
+    startY:y,
+    head:[[
+      {content:'Comp.',styles:{fillColor:AZUL2,textColor:BRANCO,fontStyle:'bold',fontSize:7}},
+      {content:'Original',styles:{fillColor:AZUL2,textColor:BRANCO,fontStyle:'bold',fontSize:7,halign:'right'}},
+      {content:'SM época',styles:{fillColor:AZUL2,textColor:BRANCO,fontStyle:'bold',fontSize:7,halign:'right'}},
+      {content:'Valor usado',styles:{fillColor:AZUL2,textColor:BRANCO,fontStyle:'bold',fontSize:7,halign:'right'}},
+      {content:'Fator INPC',styles:{fillColor:AZUL2,textColor:BRANCO,fontStyle:'bold',fontSize:7,halign:'center'}},
+      {content:'Corrigido',styles:{fillColor:AZUL2,textColor:BRANCO,fontStyle:'bold',fontSize:7,halign:'right'}},
+    ]],
+    body:tRows,
+    columnStyles:{
+      0:{cellWidth:20,fontSize:7,fontStyle:'bold'},
+      1:{cellWidth:28,halign:'right',fontSize:7},
+      2:{cellWidth:22,halign:'right',fontSize:7},
+      3:{cellWidth:32,halign:'right',fontSize:7},
+      4:{cellWidth:22,halign:'center',fontSize:6.5},
+      5:{cellWidth:28,halign:'right',fontSize:7,fontStyle:'bold'},
+    },
+    tableWidth:mR-mL,
+    margin:{left:mL,right:14},
+    styles:{lineColor:[220,216,210],lineWidth:0.15,cellPadding:2,overflow:'linebreak'},
+    alternateRowStyles:{fillColor:[248,247,244]},
+    didParseCell:function(data){
+      if(data.section==='body'&&data.column.index===3){
+        const txt=data.cell.raw||'';
+        if(txt.includes('[SM]'))data.cell.styles.textColor=[90,74,0];
+        if(txt.includes('[TETO]'))data.cell.styles.textColor=[139,26,26];
+      }
+    }
+  });
+
+  y=doc.lastAutoTable.finalY+6;
+
+  // ── DISCLAIMER ──
+  const dtxt='Simulação para fins de planejamento jurídico. Os valores calculados baseiam-se nas informações do CNIS fornecido e nos índices INPC/IBGE disponíveis. Competências com indicador PSC-MEN-SM-EC103 podem requerer complementação junto ao INSS. Esta simulação não substitui análise técnica individualizada do processo previdenciário.';
+  const dlines=doc.splitTextToSize(dtxt,mR-mL-10);
+  const dH=8+dlines.length*3.6+3;
+  if(y+dH>H-14){doc.addPage();y=14;}
+  doc.setFillColor(...WARN_BG);doc.roundedRect(mL,y,mR-mL,dH,2,2,'F');
+  doc.setDrawColor(200,180,0);doc.setLineWidth(0.4);doc.line(mL+1,y,mL+1,y+dH);
+  doc.setTextColor(...WARN);doc.setFont('helvetica','bold');doc.setFontSize(7);
+  doc.text('Aviso — Natureza jurídica deste documento',mL+5,y+6);
+  doc.setFont('helvetica','normal');doc.setFontSize(6.5);doc.text(dlines,mL+5,y+11);
+
+  // ── RODAPÉ ──
+  const np=doc.internal.getNumberOfPages();
+  for(let i=1;i<=np;i++){
+    doc.setPage(i);
+    doc.setDrawColor(200,196,190);doc.setLineWidth(0.3);doc.line(mL,H-10,mR,H-10);
+    doc.setTextColor(160,160,160);doc.setFont('helvetica','normal');doc.setFontSize(6.5);
+    doc.text('Simulador de Benefício | Lei 8.213/91 · EC 103/2019 · LC 142/2013 | Mueller & Linck Advocacia',mL,H-6);
+    doc.text('Página '+i+' de '+np,mR,H-6,{align:'right'});
+  }
+
+  const nomeArq=cliente!=='(não informado)'
+    ?'Beneficio_'+cliente.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_\-]/g,'')+'_'+(dataCalc.replace(/-/g,'')||'')+'.pdf'
+    :'Beneficio_ficha.pdf';
+  doc.save(nomeArq);
 }
 
 init();
