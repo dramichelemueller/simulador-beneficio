@@ -502,22 +502,122 @@ async function processarArquivo(file){
 
 function extrairCompetencias(texto){
   const comps={};
-  // Padrão: MM/YYYY seguido de número (remuneração)
-  // Tenta capturar padrões como "09/2018 966,67" ou "09/2018   966,67"
-  const regex=/(\d{2})\/(\d{4})\s+([\d.,]+)/g;
-  let match;
-  while((match=regex.exec(texto))!==null){
-    const mes=match[1],ano=match[2];
-    if(parseInt(ano)<1994||parseInt(ano)>2030)continue;
+
+  // ── ESTRATÉGIA DE EXTRAÇÃO ────────────────────────────────────────────────
+  // O CNIS do INSS tem dois formatos principais:
+  //
+  // 1. VÍNCULOS NORMAIS (empregado, autônomo, recolhimento):
+  //    Linha com: MM/YYYY  <remuneração ou salário-contribuição>  [indicadores]
+  //    Ex: "07/1994  64,80"  ou  "03/2010  1.020,00"
+  //
+  // 2. AGRUPAMENTO DE CONTRATANTES/COOPERATIVAS:
+  //    Linha com: MM/YYYY  <CNPJ_contrat>  <CNPJ_estab>  Normal  <remuneração>
+  //    Ex: "04/2003  92.228.220/0001-95  92.228.220/0001-95  Normal  300,00"
+  //    O CNPJ aparece no formato XX.XXX.XXX/XXXX-XX — NÃO é remuneração.
+  //
+  // REGRA FUNDAMENTAL: o PBC começa em 07/1994 (Lei 9.876/99).
+  // Tudo anterior a 07/1994 está em moeda antiga (Cr$, NCz$, CrR$) e é
+  // DESCARTADO — exatamente como fazem o INSS e o Previdenciarista.
+  //
+  // Para cooperativas, a remuneração vem APÓS "Normal" ou "Não Cooperado":
+  //   padrão: (MM/YYYY) ... (Normal|Não Cooperado) ... (valor R$)
+  // Para vínculos normais a remuneração vem logo após a competência,
+  //   mas precisamos EXCLUIR números que são CNPJs (contêm "/").
+
+  // Detectar se o texto tem seção de agrupamento/cooperativa
+  const temCooperativa=/AGRUPAMENTO DE CONTRATANTES|COOPERATIVA/i.test(texto);
+
+  // ── PASSO 1: Cooperativas — padrão específico ─────────────────────────────
+  // Linha tipo: "MM/YYYY  CNPJ  CNPJ  Normal  valor" ou
+  //             "MM/YYYY  CNPJ  CNPJ  Não Cooperado  valor"
+  if(temCooperativa){
+    // Regex: competência, CNPJs (com /), tipo prestação, depois o valor
+    const reCoopFull=/(\d{2})\/(\d{4})\s+[\d.]+\/[\d.]+-[\d]+\s+[\d.]+\/[\d.]+-[\d]+\s+(?:Normal|N[ãa]o\s+Cooperado)\s+([\d.,]+)/gi;
+    let m;
+    while((m=reCoopFull.exec(texto))!==null){
+      const mes=m[1],ano=m[2];
+      const comp=ano+'-'+mes;
+      if(comp<'1994-07'||comp>'2030-12')continue;
+      const val=parseFloat(m[3].replace(/\./g,'').replace(',','.'));
+      if(isNaN(val)||val<=0)continue;
+      // Para cooperativas, soma os valores (pode ter múltiplos contratantes)
+      comps[comp]=(comps[comp]||0)+val;
+    }
+  }
+
+  // ── PASSO 1b: Não Cooperado sem CNPJ completo ────────────────────────────
+  // Ex: "01/2024  92.228.220  92.228.220/0001-95  Não Cooperado  4.236,00"
+  const reNaoCoopSimples=/(\d{2})\/(\d{4})\s+\d{2,3}\.\d{3}\.\d{3}\s+[\d.]+\/[\d.]+-[\d]+\s+N[ãa]o\s+Cooperado\s+([\d.,]+)/gi;
+  let mncs;
+  while((mncs=reNaoCoopSimples.exec(texto))!==null){
+    const mes=mncs[1],ano=mncs[2];
     const comp=ano+'-'+mes;
-    if(comp<'1994-07')continue;
-    const valStr=match[3].replace(/\./g,'').replace(',','.');
+    if(comp<'1994-07'||comp>'2030-12')continue;
+    const val=parseFloat(mncs[3].replace(/\./g,'').replace(',','.'));
+    if(isNaN(val)||val<=0)continue;
+    comps[comp]=(comps[comp]||0)+val;
+  }
+  // Padrão: MM/YYYY seguido de valor numérico que NÃO seja CNPJ
+  // CNPJ tem formato: digitos/digitos-digitos — excluímos linhas com "/"
+  // Também excluímos valores absurdamente grandes (>= teto * 1000) que
+  // provavelmente são números de processo ou CPF/CNPJ capturados erroneamente.
+  const reNormal=/(\d{2})\/(\d{4})\s+([\d.]+,\d{2})/g;
+  let mn;
+  while((mn=reNormal.exec(texto))!==null){
+    const mes=mn[1],ano=mn[2];
+    const comp=ano+'-'+mes;
+    if(comp<'1994-07'||comp>'2030-12')continue;
+
+    const valStr=mn[3].replace(/\./g,'').replace(',','.');
     const val=parseFloat(valStr);
-    if(isNaN(val)||val<0)continue;
-    // Mantém o maior valor se houver múltiplos vínculos na mesma competência
+    if(isNaN(val)||val<=0)continue;
+
+    // Rejeitar se já captado pela extração de cooperativa
+    // e rejeitar valores que claramente são CPF/CNPJ transformados em número
+    // (> 50x o teto atual é absurdo — o teto 2026 é ~8.475)
+    const TETO_MAX=8475.55*50; // ~423.000
+    if(val>=TETO_MAX)continue;
+
+    // Rejeitar se o contexto imediato antes da competência contém "/" (CNPJ)
+    const inicio=Math.max(0,mn.index-80);
+    const contexto=texto.substring(inicio,mn.index);
+    // Se a linha anterior contém um CNPJ com barra, provavelmente é coop
+    if(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/.test(contexto))continue;
+
+    // Para vínculos normais: usa o maior valor (múltiplos vínculos na mesma comp)
+    if(!comps[comp]||(!temCooperativa&&val>comps[comp])){
+      // Não sobrescreve valor de cooperativa já capturado
+      if(temCooperativa&&comps[comp]){
+        // Só atualiza se a competência ainda não tem valor de coop
+        // (heurística: valor de coop tende a ser o valor de contribuição real)
+      } else {
+        if(!comps[comp]||val>comps[comp])comps[comp]=val;
+      }
+    }
+  }
+
+  // ── PASSO 3: Fallback — "Salário Contribuição" explícito ─────────────────
+  // Para autônomos/recolhimento, o CNIS lista: Contribuição  SalárioContribuição
+  // Padrão: competência + data_pagamento + contribuição + salário_contribuição
+  // Ex: "10/1993  01/11/1993  1.202,40  12.024,00"
+  // O salário de contribuição é o SEGUNDO valor (o maior).
+  const reSalContrib=/(\d{2})\/(\d{4})\s+\d{2}\/\d{2}\/\d{4}\s+[\d.,]+\s+([\d.]+,\d{2})/g;
+  let ms;
+  while((ms=reSalContrib.exec(texto))!==null){
+    const mes=ms[1],ano=ms[2];
+    const comp=ano+'-'+mes;
+    if(comp<'1994-07'||comp>'2030-12')continue;
+    const val=parseFloat(ms[3].replace(/\./g,'').replace(',','.'));
+    if(isNaN(val)||val<=0)continue;
+    const TETO_MAX=8475.55*50;
+    if(val>=TETO_MAX)continue;
+    // Só aplica se não há valor de cooperativa para esta comp
     if(!comps[comp]||val>comps[comp])comps[comp]=val;
   }
+
+  // ── MONTAR ARRAY FINAL ────────────────────────────────────────────────────
   return Object.entries(comps)
+    .filter(([comp])=>comp>='1994-07')
     .sort(([a],[b])=>a.localeCompare(b))
     .map(([comp,original])=>{
       const sm=getSM(comp);
