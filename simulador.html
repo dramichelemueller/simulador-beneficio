@@ -920,7 +920,7 @@ function exportarPDF(){
   doc.setTextColor(...BRANCO);doc.setFont('helvetica','bold');doc.setFontSize(13);
   doc.text('Simulador de Benefício — Cálculo de RMI',mL,12);
   doc.setFont('helvetica','normal');doc.setFontSize(7.5);
-  doc.text('Lei 8.213/91 · EC 103/2019 · LC 142/2013 · Correção INPC · Mueller & Linck Advocacia',mL,18);
+  doc.text('Lei 8.213/91 · EC 103/2019 · LC 142/2013 · Correção INPC · Dra. Michele Mueller — Advocacia',mL,18);
   doc.setDrawColor(...AZUL2);doc.setLineWidth(0.3);doc.line(mL,21,mR,21);
   doc.setFontSize(7);doc.setTextColor(200,215,230);
   doc.text('CLIENTE',mL,27);doc.text('SEXO',88,27);doc.text('NASCIMENTO',108,27);doc.text('DATA CÁLCULO',148,27);doc.text('ADVOGADA',172,27);
@@ -1015,7 +1015,7 @@ function exportarPDF(){
     doc.setFillColor(...WARN_BG);doc.roundedRect(mL,y,mR-mL,avH,2,2,'F');
     doc.setDrawColor(200,180,0);doc.setLineWidth(0.4);doc.line(mL+1,y,mL+1,y+avH);
     doc.setTextColor(...WARN);doc.setFont('helvetica','bold');doc.setFontSize(7.5);
-    doc.text('⚠ Competências ajustadas para o salário mínimo ('+ajustadas.length+')',mL+5,y+6);
+    doc.text('ATENCAO — Competências ajustadas para o salário mínimo ('+ajustadas.length+')',mL+5,y+6);
     doc.setFont('helvetica','normal');doc.setFontSize(6.5);
     ajustadas.forEach((c,i)=>{
       doc.text(fmtComp(c.comp)+' — original: '+mc(c.original)+' → ajustado para SM de '+mc(c.sm),mL+5,y+11+i*4);
@@ -1092,7 +1092,7 @@ function exportarPDF(){
     doc.setPage(i);
     doc.setDrawColor(200,196,190);doc.setLineWidth(0.3);doc.line(mL,H-10,mR,H-10);
     doc.setTextColor(160,160,160);doc.setFont('helvetica','normal');doc.setFontSize(6.5);
-    doc.text('Simulador de Benefício | Lei 8.213/91 · EC 103/2019 · LC 142/2013 | Mueller & Linck Advocacia',mL,H-6);
+    doc.text('Simulador de Benefício | Lei 8.213/91 · EC 103/2019 · LC 142/2013 | Dra. Michele Mueller — Advocacia',mL,H-6);
     doc.text('Página '+i+' de '+np,mR,H-6,{align:'right'});
   }
 
