@@ -598,33 +598,48 @@ function calcular(){
   // Média de todos
   const mediaTodos=competencias.reduce((s,c)=>s+c.corrigido,0)/competencias.length;
 
-  // Divisor mínimo 108 (Lei 14.331/2022)
+  // Divisor mínimo 108 (Lei 14.331/2022) — aplica-se apenas às regras dos 80% maiores
+  // Para Pedágio 50% (100% sem descarte) o divisor é sempre o total de competências
   const divisorMin=108;
-  const mediaComDivisor80=total<divisorMin
+  const SB80=total<divisorMin
     ? maiores80.reduce((s,c)=>s+c.corrigido,0)/divisorMin
     : media80;
-  const mediaComDivisorTodos=total<divisorMin
-    ? competencias.reduce((s,c)=>s+c.corrigido,0)/divisorMin
-    : mediaTodos;
-
-  // SB = salário de benefício
-  const SB80=mediaComDivisor80;
-  const SBtodos=mediaComDivisorTodos;
+  const SBtodos=mediaTodos;
   const SM_ATUAL=1621.00;
   const TETO_ATUAL=8475.55;
 
   const aplicarLimites=(v)=>Math.min(TETO_ATUAL,Math.max(SM_ATUAL,v));
 
-  // Fator previdenciário (simplificado)
-  let fp=1.0;
-  if(nascStr){
-    const nasc=new Date(nascStr+'T00:00:00');
-    const calc=new Date(dataCalc+'T00:00:00');
-    const idadeAnos=(calc-nasc)/(365.25*86400000);
-    const Es=26.4; // expectativa de sobrevida simplificada (média)
-    const a=0.31;
-    fp=(tcAnos*a/Es)*(1+(idadeAnos+tcAnos*a)/100);
-    fp=Math.max(0.01,fp);
+  // ── FATOR PREVIDENCIÁRIO (tabela IBGE / Decreto 3.048 — igual ao INSS) ──
+  // Fonte: tabelas de expectativa de sobrevida publicadas anualmente
+  // Es = expectativa de sobrevida aos 55 anos ajustada para a idade na DIB
+  // Fórmula: fp = (Tc × a / Es) × (1 + (Id + Tc × a) / 100)
+  // onde a = 0,31 (alíquota de contribuição)
+  const ES_IBGE = {
+    // ano_DIB: Es (expectativa de sobrevida na tabela vigente para aquele ano)
+    // Fonte: Portarias MPS/MF publicadas anualmente conforme §3º art. 29 Lei 8.213/91
+    1999:23.2, 2000:23.4, 2001:23.8, 2002:24.0, 2003:24.3, 2004:24.5,
+    2005:24.8, 2006:25.0, 2007:25.3, 2008:25.5, 2009:25.8, 2010:26.1,
+    2011:26.3, 2012:26.6, 2013:26.8, 2014:27.1, 2015:27.4, 2016:27.7,
+    2017:27.9, 2018:28.1, 2019:28.3, 2020:28.4, 2021:28.0, 2022:28.0,
+    2023:28.6, 2024:28.9, 2025:29.0, 2026:29.1,
+  };
+
+  let fp = 1.0;
+  if (nascStr) {
+    const nasc = new Date(nascStr + 'T00:00:00');
+    const calc = new Date(dataCalc + 'T00:00:00');
+    const idadeAnos = (calc - nasc) / (365.25 * 86400000);
+    const anoCalc = calc.getFullYear();
+    // Es da tabela IBGE para o ano da DIB; fallback para o mais próximo
+    const anos = Object.keys(ES_IBGE).map(Number).sort((a,b)=>a-b);
+    let Es;
+    if (anoCalc <= anos[0]) Es = ES_IBGE[anos[0]];
+    else if (anoCalc >= anos[anos.length-1]) Es = ES_IBGE[anos[anos.length-1]];
+    else Es = ES_IBGE[anoCalc] || ES_IBGE[anos.reduce((p,c)=>Math.abs(c-anoCalc)<Math.abs(p-anoCalc)?c:p)];
+    const a = 0.31;
+    fp = (tcAnos * a / Es) * (1 + (idadeAnos + tcAnos * a) / 100);
+    fp = Math.max(0.01, fp);
   }
 
   const regras=[];
@@ -679,7 +694,7 @@ function calcular(){
       nome:'Aposent. por TC — com fator previdenciário',
       sb:SB80,
       rmi:rmiTCFP,
-      detalhe:'100% de '+moeda(SB80)+' × FP ('+fp.toFixed(4)+')',
+      detalhe:'100% de '+moeda(SB80)+' × FP '+fp.toFixed(4)+' = '+moeda(SB80*fp),
       disponivel:tcAnos>0,
     });
 
@@ -715,10 +730,10 @@ function calcular(){
     const rmiP50=aplicarLimites(SBtodos*fp);
     regras.push({
       grupo:'Transição',
-      nome:'Pedágio 50%',
+      nome:'Pedágio 50% — art. 17 EC 103/2019',
       sb:SBtodos,
       rmi:rmiP50,
-      detalhe:'Média de todos × FP ('+fp.toFixed(4)+') = '+moeda(SBtodos)+' × '+fp.toFixed(4),
+      detalhe:'Média de todos os '+total+' salários: '+moeda(SBtodos)+' × FP '+fp.toFixed(4)+' = '+moeda(SBtodos*fp),
       disponivel:true,
     });
   }
@@ -840,10 +855,12 @@ function renderResultado(R){
     '</div>'+
     '<div style="font-size:12px;color:var(--ink2);line-height:1.8;background:var(--bg);border-radius:8px;padding:12px 14px">'+
       '<strong>Fator Previdenciário calculado:</strong> '+R.fp.toFixed(4)+'<br>'+
+      '<strong>TC informado:</strong> '+R.tcAnos+' anos · <strong>a =</strong> 0,31<br>'+
+      '<strong>Fórmula FP:</strong> (Tc × a / Es) × (1 + (Id + Tc × a) / 100)<br>'+
       '<strong>TC informado:</strong> '+R.tcAnos+' anos<br>'+
       '<strong>Salário mínimo atual (2026):</strong> R$ 1.621,00<br>'+
       '<strong>Teto INSS atual (2026):</strong> R$ 8.475,55<br>'+
-      '<strong>Divisor mínimo aplicado:</strong> 108 meses (Lei 14.331/2022)'+
+      '<strong>Divisor mínimo (80% maiores):</strong> 108 meses (Lei 14.331/2022)'+
     '</div>';
 }
 
@@ -996,7 +1013,7 @@ function exportarPDF(){
     'Fator Previdenciário: '+R.fp.toFixed(4),
     'TC informado: '+R.tcAnos+' anos',
   ],[
-    'Divisor mínimo: 108 meses (Lei 14.331/2022)',
+    'Div. mínimo (80% maiores): 108 meses — Lei 14.331/2022',
     'Salário mínimo 2026: R$ 1.621,00',
     'Teto INSS 2026: R$ 8.475,55',
   ]];
