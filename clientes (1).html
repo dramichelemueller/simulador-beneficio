@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clientes — Simulador de Benefício</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Source+Sans+3:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#f5f3ef;--card:#fff;--ink:#1c1a17;--ink2:#5c5852;--ink3:#9c9890;
+  --rule:#e8e4dc;--accent:#1a3a5c;--accent2:#2a5a8c;--accent-lt:#e8f0f8;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Source Sans 3',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;}
+header{background:var(--accent);color:#fff;padding:22px 40px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+.hd-left h1{font-family:'Playfair Display',serif;font-size:21px;font-weight:600;}
+.hd-sub{font-size:10px;opacity:.5;margin-top:3px;letter-spacing:.5px;text-transform:uppercase;}
+.hd-right{display:flex;gap:10px;align-items:center;}
+.btn-hd{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);color:#fff;border-radius:7px;padding:7px 14px;font-size:12px;font-family:'Source Sans 3',sans-serif;cursor:pointer;}
+.btn-hd:hover{background:rgba(255,255,255,.2);}
+.user-badge{background:rgba(255,255,255,.15);border-radius:6px;padding:4px 10px;font-size:12px;}
+.main{max-width:900px;margin:0 auto;padding:30px 22px;}
+.top-row{display:flex;gap:12px;margin-bottom:26px;flex-wrap:wrap;}
+.search-wrap{flex:1;min-width:200px;position:relative;}
+.search-wrap input{width:100%;border:1.5px solid var(--rule);border-radius:8px;padding:10px 14px 10px 38px;font-size:13px;font-family:'Source Sans 3',sans-serif;background:#fff;color:var(--ink);}
+.search-wrap input:focus{outline:none;border-color:var(--accent2);}
+.si{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--ink3);}
+.btn-novo{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:600;font-family:'Source Sans 3',sans-serif;cursor:pointer;white-space:nowrap;}
+.btn-novo:hover{background:var(--accent2);}
+.section-title{font-family:'Playfair Display',serif;font-size:18px;font-weight:600;margin-bottom:14px;}
+.lista{display:flex;flex-direction:column;gap:8px;}
+.cc{background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:15px 19px;display:flex;align-items:center;gap:13px;cursor:pointer;transition:all .14s;}
+.cc:hover{border-color:var(--accent2);box-shadow:0 2px 10px rgba(26,58,92,.1);}
+.cc-av{width:40px;height:40px;border-radius:50%;background:var(--accent-lt);display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:16px;font-weight:700;color:var(--accent);flex-shrink:0;}
+.cc-info{flex:1;}
+.cc-nome{font-size:14px;font-weight:600;}
+.cc-meta{font-size:11.5px;color:var(--ink3);margin-top:2px;}
+.cc-arr{color:var(--ink3);font-size:18px;}
+.empty{text-align:center;padding:48px;color:var(--ink3);font-size:13px;border:2px dashed var(--rule);border-radius:10px;line-height:1.8;}
+.loading{text-align:center;padding:48px;color:var(--ink3);}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center;}
+.overlay.open{display:flex;}
+.modal{background:var(--card);border-radius:14px;padding:30px;width:100%;max-width:440px;box-shadow:0 8px 40px rgba(0,0,0,.2);}
+.modal h2{font-family:'Playfair Display',serif;font-size:19px;margin-bottom:20px;}
+.fg{margin-bottom:13px;}
+.fg label{display:block;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--ink3);margin-bottom:5px;}
+.fg input,.fg select{width:100%;border:1.5px solid var(--rule);border-radius:7px;padding:8px 12px;font-size:13px;font-family:'Source Sans 3',sans-serif;color:var(--ink);background:var(--bg);}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--accent2);background:#fff;}
+.modal-btns{display:flex;gap:10px;margin-top:20px;justify-content:flex-end;}
+.btn-cancel{background:var(--bg);border:1px solid var(--rule);color:var(--ink2);border-radius:7px;padding:8px 16px;font-size:13px;font-family:'Source Sans 3',sans-serif;cursor:pointer;}
+.btn-save{background:var(--accent);color:#fff;border:none;border-radius:7px;padding:8px 20px;font-size:13px;font-weight:600;font-family:'Source Sans 3',sans-serif;cursor:pointer;}
+.btn-save:hover{background:var(--accent2);}
+.m-erro{background:#fdf0f0;border:1px solid #e0a0a0;color:#8b1a1a;border-radius:6px;padding:8px 12px;font-size:12px;margin-top:10px;display:none;}
+</style>
+</head>
+<body>
+<header>
+  <div class="hd-left">
+    <h1>💰 Simulador de Benefício</h1>
+    <div class="hd-sub">Cálculo de RMI · Todas as regras previdenciárias</div>
+  </div>
+  <div class="hd-right">
+    <span class="user-badge" id="user-email">...</span>
+    <button class="btn-hd" onclick="sair()">Sair</button>
+  </div>
+</header>
+<div class="main">
+  <div class="top-row">
+    <div class="search-wrap">
+      <span class="si">🔍</span>
+      <input type="text" id="busca" placeholder="Buscar cliente..." oninput="filtrar()">
+    </div>
+    <button class="btn-novo" onclick="abrirModal()">+ Novo Cliente</button>
+  </div>
+  <div class="section-title">Clientes</div>
+  <div class="lista" id="lista"><div class="loading">Carregando...</div></div>
+</div>
+
+<div class="overlay" id="modal">
+  <div class="modal">
+    <h2>Novo Cliente</h2>
+    <div class="fg"><label>Nome completo</label><input type="text" id="nc-nome" placeholder="Nome do cliente"></div>
+    <div class="fg"><label>Sexo</label>
+      <select id="nc-sexo"><option value="F">Feminino</option><option value="M">Masculino</option></select>
+    </div>
+    <div class="fg"><label>Data de nascimento</label><input type="date" id="nc-nasc"></div>
+    <div class="fg"><label>Observação (opcional)</label><input type="text" id="nc-obs" placeholder="Ex: aposentadoria especial 25 anos"></div>
+    <div class="m-erro" id="m-erro"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="fecharModal()">Cancelar</button>
+      <button class="btn-save" id="btn-save" onclick="criarCliente()">Criar e Calcular</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPA_URL='https://jygrhenqoupzszbhvpfj.supabase.co';
+const SUPA_KEY='sb_publishable_KzaCuupI3X-bYjcH-_L4OQ_jS2Iqwsj';
+const {createClient}=supabase;
+const sb=createClient(SUPA_URL,SUPA_KEY);
+let todos=[];
+
+async function init(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session){window.location.href='index.html';return;}
+  document.getElementById('user-email').textContent=session.user.email;
+  await carregar();
+}
+
+async function carregar(){
+  const{data,error}=await sb.from('clientes_beneficio').select('*').order('nome',{ascending:true});
+  const lista=document.getElementById('lista');
+  if(error){lista.innerHTML='<div class="empty">Erro ao carregar clientes.</div>';return;}
+  todos=data||[];
+  renderLista(todos);
+}
+
+function renderLista(clientes){
+  const lista=document.getElementById('lista');
+  if(!clientes.length){
+    lista.innerHTML='<div class="empty">Nenhum cliente cadastrado ainda.<br>Clique em <strong>+ Novo Cliente</strong> para começar.</div>';return;
+  }
+  lista.innerHTML=clientes.map(c=>{
+    const ini=c.nome.split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase();
+    const sx=c.sexo==='F'?'Feminino':'Masculino';
+    const nasc=c.data_nascimento?' · Nasc. '+fd(c.data_nascimento):'';
+    const obs=c.observacao?' · '+c.observacao:'';
+    return '<div class="cc" onclick="abrir(\''+c.id+'\')">' +
+      '<div class="cc-av">'+ini+'</div>' +
+      '<div class="cc-info"><div class="cc-nome">'+c.nome+'</div><div class="cc-meta">'+sx+nasc+obs+'</div></div>' +
+      '<div class="cc-arr">›</div></div>';
+  }).join('');
+}
+
+function filtrar(){
+  const q=document.getElementById('busca').value.toLowerCase();
+  renderLista(todos.filter(c=>c.nome.toLowerCase().includes(q)));
+}
+
+function abrir(id){window.location.href='simulador.html?cliente='+id;}
+function abrirModal(){document.getElementById('modal').classList.add('open');document.getElementById('nc-nome').focus();}
+function fecharModal(){
+  document.getElementById('modal').classList.remove('open');
+  ['nc-nome','nc-nasc','nc-obs'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('m-erro').style.display='none';
+}
+
+async function criarCliente(){
+  const nome=document.getElementById('nc-nome').value.trim();
+  const sexo=document.getElementById('nc-sexo').value;
+  const nasc=document.getElementById('nc-nasc').value;
+  const obs=document.getElementById('nc-obs').value.trim();
+  const btn=document.getElementById('btn-save');
+  if(!nome){mostrarErro('Informe o nome do cliente.');return;}
+  btn.disabled=true;btn.textContent='Salvando...';
+  document.getElementById('m-erro').style.display='none';
+  const{data,error}=await sb.from('clientes_beneficio').insert({nome,sexo,data_nascimento:nasc||null,observacao:obs||null}).select().single();
+  btn.disabled=false;btn.textContent='Criar e Calcular';
+  if(error){mostrarErro('Erro ao salvar. Tente novamente.');return;}
+  fecharModal();
+  window.location.href='simulador.html?cliente='+data.id;
+}
+
+function mostrarErro(m){const e=document.getElementById('m-erro');e.textContent=m;e.style.display='block';}
+function fd(s){if(!s)return'';const[a,m,d]=s.split('-');return d+'/'+m+'/'+a;}
+async function sair(){await sb.auth.signOut();window.location.href='index.html';}
+document.getElementById('modal').addEventListener('click',function(e){if(e.target===this)fecharModal();});
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador de Benefício — Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Source+Sans+3:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg:#f5f3ef; --card:#fff; --ink:#1c1a17; --ink2:#5c5852; --ink3:#9c9890;
+  --rule:#e8e4dc; --accent:#1a3a5c; --accent2:#2a5a8c; --accent-lt:#e8f0f8;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Source Sans 3',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;display:flex;align-items:center;justify-content:center;}
+.wrap{width:100%;max-width:420px;padding:24px;}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:16px;padding:40px 36px;box-shadow:0 4px 24px rgba(0,0,0,.07);}
+.logo{text-align:center;margin-bottom:32px;}
+.logo-icon{width:56px;height:56px;background:var(--accent);border-radius:14px;display:inline-flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:14px;}
+.logo-title{font-family:'Playfair Display',serif;font-size:20px;font-weight:600;}
+.logo-sub{font-size:11px;color:var(--ink3);margin-top:4px;letter-spacing:.5px;text-transform:uppercase;}
+.fg{margin-bottom:16px;}
+label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--ink3);margin-bottom:6px;}
+input{width:100%;border:1.5px solid var(--rule);border-radius:8px;padding:10px 14px;font-size:14px;font-family:'Source Sans 3',sans-serif;color:var(--ink);background:var(--bg);}
+input:focus{outline:none;border-color:var(--accent2);background:#fff;}
+.btn{width:100%;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:600;font-family:'Source Sans 3',sans-serif;cursor:pointer;margin-top:8px;}
+.btn:hover{background:var(--accent2);}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+.erro{background:#fdf0f0;border:1px solid #e0a0a0;color:#8b1a1a;border-radius:7px;padding:10px 14px;font-size:13px;margin-top:14px;display:none;}
+.rodape{text-align:center;margin-top:20px;font-size:11px;color:var(--ink3);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="logo">
+      <div class="logo-icon">💰</div>
+      <div class="logo-title">Simulador de Benefício</div>
+      <div class="logo-sub">Cálculo de RMI · Todas as regras</div>
+    </div>
+    <div class="fg"><label>E-mail</label><input type="email" id="email" placeholder="seu@email.com"></div>
+    <div class="fg"><label>Senha</label><input type="password" id="senha" placeholder="••••••••"></div>
+    <button class="btn" id="btn" onclick="login()">Entrar</button>
+    <div class="erro" id="erro"></div>
+  </div>
+  <div class="rodape">Mueller &amp; Linck Advocacia · Uso interno</div>
+</div>
+<script>
+const SUPA_URL='https://jygrhenqoupzszbhvpfj.supabase.co';
+const SUPA_KEY='sb_publishable_KzaCuupI3X-bYjcH-_L4OQ_jS2Iqwsj';
+const {createClient}=supabase;
+const sb=createClient(SUPA_URL,SUPA_KEY);
+sb.auth.getSession().then(({data})=>{if(data.session)window.location.href='clientes.html';});
+async function login(){
+  const email=document.getElementById('email').value.trim();
+  const senha=document.getElementById('senha').value;
+  const btn=document.getElementById('btn');
+  const erro=document.getElementById('erro');
+  if(!email||!senha){mostrarErro('Preencha e-mail e senha.');return;}
+  btn.disabled=true;btn.textContent='Entrando...';erro.style.display='none';
+  const{error}=await sb.auth.signInWithPassword({email,password:senha});
+  if(error){mostrarErro('E-mail ou senha incorretos.');btn.disabled=false;btn.textContent='Entrar';}
+  else window.location.href='clientes.html';
+}
+function mostrarErro(m){const e=document.getElementById('erro');e.textContent=m;e.style.display='block';}
+document.addEventListener('keydown',e=>{if(e.key==='Enter')login();});
+</script>
+</body>
+</html>
